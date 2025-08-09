@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Employee Query Dashboard</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: linear-gradient(to bottom, #e3f2fd, #bbdefb);
+      color: #333;
+    }
+  
+    h1 {
+      text-align: center;
+      color: #0d47a1;
+      font-size: 2.5rem;
+      margin-bottom: 20px;
+      text-shadow: 1px 1px 2px #90caf9;
+    }
+  
+    .section {
+      margin: 20px 0;
+      padding: 15px;
+      background: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+  
+    .btn {
+      background-color: #1e88e5;
+      color: white;
+      padding: 10px 16px;
+      margin: 5px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: background-color 0.3s ease, transform 0.2s ease;
+    }
+  
+    .btn:hover {
+      background-color: #1565c0;
+      transform: scale(1.05);
+    }
+  
+    .query-btn {
+      margin: 4px;
+    }
+  
+    #custom-query-container {
+      display: flex;
+      gap: 10px;
+      margin: 15px 0;
+      align-items: center;
+    }
+  
+    #custom-query-input {
+      flex: 1;
+      padding: 10px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      font-size: 1rem;
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+  
+    .hidden {
+      display: none;
+    }
+  
+    #loading-spinner {
+      font-weight: bold;
+      color: #666;
+      text-align: center;
+      margin-top: 20px;
+    }
+  
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+      background: #ffffff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+  
+    th, td {
+      border: 1px solid #ddd;
+      padding: 12px;
+      text-align: left;
+      font-size: 0.95rem;
+    }
+  
+    th {
+      background-color: #1976d2;
+      color: white;
+      font-weight: bold;
+    }
+  
+    tr:nth-child(even) {
+      background-color: #f9f9f9;
+    }
+  
+    tr:hover {
+      background-color: #e3f2fd;
+    }
+  
+    #error-message {
+      color: #d32f2f;
+      margin-top: 10px;
+      font-weight: bold;
+      text-align: center;
+    }
+  
+    #current-query-container, #sql-query-container {
+      margin-top: 20px;
+      background: #ffffff;
+      padding: 15px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+  
+    #current-query-container h3, #sql-query-container h3 {
+      color: #0d47a1;
+      margin-bottom: 10px;
+    }
+  
+    #initial-message {
+      text-align: center;
+      font-size: 1.1rem;
+      color: #555;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Employee Management Query Dashboard</h1>
+
+  <div class="section" id="employee-section">
+    <h2>Employee Info Queries</h2>
+    <div id="employee-buttons"></div>
+  </div>
+
+  <div class="section" id="attendance-section">
+    <h2>Attendance Queries</h2>
+    <div id="attendance-buttons"></div>
+  </div>
+
+  <div class="section" id="payroll-section">
+    <h2>Payroll Queries</h2>
+    <div id="payroll-buttons"></div>
+  </div>
+
+  <div class="section" id="custom-query-container">
+    <input type="text" id="custom-query-input" placeholder="Enter custom query..." />
+    <button class="btn" id="run-custom-query">Run</button>
+  </div>
+
+  <div id="error-message" class="hidden"></div>
+
+  <div id="current-query-container" class="hidden">
+    <h3>Current Query:</h3>
+    <p id="current-query"></p>
+  </div>
+
+  <div id="query-results-container">
+    <div id="loading-spinner" class="hidden">Loading...</div>
+    <div id="sql-query-container" class="hidden">
+      <h3>Generated SQL:</h3>
+      <p id="sql-query"></p>
+    </div>
+    <div id="query-results"></div>
+    <p id="initial-message">Please select or enter a query to see results.</p>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      fetchPredefinedQueries();
+      document.getElementById('run-custom-query').addEventListener('click', function() {
+        const customQuery = document.getElementById('custom-query-input').value.trim();
+        if (customQuery) {
+          processQuery(customQuery);
+        } else {
+          showError('Please enter a query');
+        }
+      });
+    });
+
+    function fetchPredefinedQueries() {
+      fetch('/api/predefined_queries')
+        .then(response => {
+          if (!response.ok) throw new Error('Network response was not ok');
+          return response.json();
+        })
+        .then(data => {
+          populateQueryButtons('employee-buttons', data.employee_info);
+          populateQueryButtons('attendance-buttons', data.attendance_info);
+          populateQueryButtons('payroll-buttons', data.payroll_info);
+        })
+        .catch(error => {
+          console.error('Error fetching predefined queries:', error);
+          showError('Failed to load predefined queries. Please try refreshing the page.');
+        });
+    }
+
+    function populateQueryButtons(containerId, queries) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = '';
+      queries.forEach(query => {
+        const button = document.createElement('button');
+        button.className = 'btn query-btn';
+        button.textContent = query.name;
+        button.addEventListener('click', function() {
+          processQuery(query.query);
+        });
+        container.appendChild(button);
+      });
+    }
+
+    function processQuery(query) {
+      document.getElementById('current-query').textContent = query;
+      document.getElementById('current-query-container').classList.remove('hidden');
+      document.getElementById('sql-query-container').classList.add('hidden');
+      document.getElementById('query-results-container').classList.remove('hidden');
+      document.getElementById('loading-spinner').classList.remove('hidden');
+      document.getElementById('query-results').innerHTML = '';
+      document.getElementById('initial-message').classList.add('hidden');
+      document.getElementById('error-message').classList.add('hidden');
+
+      fetch('/api/process_query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: query }),
+      })
+      .then(response => {
+        if (!response.ok) throw new Error('Network response was not ok');
+        return response.json();
+      })
+      .then(data => {
+        document.getElementById('loading-spinner').classList.add('hidden');
+        document.getElementById('sql-query').textContent = data.sql_query || 'SQL query not available';
+        document.getElementById('sql-query-container').classList.remove('hidden');
+        if (data.success) {
+          displayQueryResults(data.result || []);
+        } else {
+          showError(data.error || 'An error occurred while processing the query');
+        }
+      })
+      .catch(error => {
+        document.getElementById('loading-spinner').classList.add('hidden');
+        showError('Failed to process query: ' + error.message);
+      });
+    }
+
+    function displayQueryResults(result) {
+      const resultsContainer = document.getElementById('query-results');
+      if (typeof result === 'string' && result.trim().startsWith('<table')) {
+        resultsContainer.innerHTML = result;
+        return;
+      }
+
+      if (Array.isArray(result)) {
+        if (result.length === 0) {
+          resultsContainer.innerHTML = '<p>No results found.</p>';
+          return;
+        }
+
+        const table = document.createElement('table');
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        const columns = Object.keys(result[0]);
+        columns.forEach(column => {
+          const th = document.createElement('th');
+          th.textContent = formatColumnName(column);
+          headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
+        result.forEach(row => {
+          const tr = document.createElement('tr');
+          columns.forEach(column => {
+            const td = document.createElement('td');
+            td.textContent = row[column] !== null ? row[column] : '';
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+
+        table.appendChild(tbody);
+        resultsContainer.appendChild(table);
+      } else if (typeof result === 'object') {
+        const table = document.createElement('table');
+        const tbody = document.createElement('tbody');
+        Object.entries(result).forEach(([key, value]) => {
+          const tr = document.createElement('tr');
+          const keyCell = document.createElement('th');
+          keyCell.textContent = formatColumnName(key);
+          tr.appendChild(keyCell);
+          const valueCell = document.createElement('td');
+          valueCell.textContent = value !== null ? value : '';
+          tr.appendChild(valueCell);
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        resultsContainer.appendChild(table);
+      } else {
+        resultsContainer.innerHTML = `<p>${result || 'No results available'}</p>`;
+      }
+    }
+
+    function formatColumnName(name) {
+      return name
+        .split('_')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+    }
+
+    function showError(message) {
+      const errorElement = document.getElementById('error-message');
+      errorElement.textContent = message;
+      errorElement.classList.remove('hidden');
+    }
+  </script>
+</body>
+</html>
